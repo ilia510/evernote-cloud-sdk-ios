@@ -102,7 +102,7 @@ NS_ENUM(NSInteger, SampleFunctions) {
             break;
             
         case kSampleFunctionsUserInfo:
-            cell.textLabel.text = @"User info";
+            cell.textLabel.text = @"User info 2";
             cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
             break;
             

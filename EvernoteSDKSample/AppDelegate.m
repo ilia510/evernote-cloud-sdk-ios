@@ -14,12 +14,10 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-#warning Add Consumer Key and Consumer Secret, but also modify your app's Info.plist according to documentation!
-#warning Remove these warnings once done with it.
 
     // Set shared session key information.
-    [ENSession setSharedSessionConsumerKey:@"your key"
-                            consumerSecret:@"your secret"
+    [ENSession setSharedSessionConsumerKey:@"zelenkini"
+                            consumerSecret:@"2d11cdeb94bc8e25"
                               optionalHost:ENSessionHostSandbox];
     
     // Override point for customization after application launch.

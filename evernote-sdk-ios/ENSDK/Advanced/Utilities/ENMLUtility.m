@@ -31,6 +31,7 @@
 #import "ENSDKAdvanced.h"
 #import "ENMLConstants.h"
 #import "KSHTMLWriter.h"
+#import "ENMIMEUtils.h"
 
 typedef void (^ENMLHTMLCompletionBlock)(NSString* html, NSError *error);
 
@@ -174,7 +175,9 @@ typedef void (^ENMLHTMLCompletionBlock)(NSString* html, NSError *error);
                         withAttributes:scrubbedAttributes];
     }
     else {
-        // Ignoring all other resource types
+        NSLog(@"%s: Writing tags for other resources type",__PRETTY_FUNCTION__);
+        [self writeATagForResource:resource
+                    withAttributes:scrubbedAttributes];
     }
 }
 
@@ -238,5 +241,35 @@ typedef void (^ENMLHTMLCompletionBlock)(NSString* html, NSError *error);
     [self.htmlWriter endElement];
 }
 
+-(void) writeATagForResource:(EDAMResource *)resource
+              withAttributes:(NSDictionary *)attributes
+{
+    
+    NSMutableDictionary *aHrefAttributes = [NSMutableDictionary dictionaryWithDictionary:attributes];
+    
+    //Preparing string to put as filename
+    NSString *hashString = [[[resource data] bodyHash] enlowercaseHexDigits];
+    
+    //Prepare extension for resource
+    NSString * extension = [ENMIMEUtils fileExtensionForMIMEType:resource.mime];
+    
+    
+    //First let's check if we have a URL
+    NSString *sourceStr = [NSString stringWithFormat:@"http://example.com/%@.%@",hashString,extension];
+    
+    // Inline resource either if asked for, if if there WAS no source URL.
+    
+    
+    [aHrefAttributes setObject:sourceStr
+                        forKey:@"href"];
+    
+    
+    [self.htmlWriter startElement:@"a" attributes:aHrefAttributes];
+    [self.htmlWriter writeHTMLFormat:@"%@.%@",hashString,extension];
+    [self.htmlWriter endElement];
+    
+    
+    
+}
 
 @end

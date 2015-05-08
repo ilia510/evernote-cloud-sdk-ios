@@ -36,7 +36,7 @@
     self.navigationItem.title = @"Notes";
     
     [SVProgressHUD showWithMaskType:SVProgressHUDMaskTypeClear];
-    [[ENSession sharedSession] findNotesWithSearch:[ENNoteSearch noteSearchCreatedByThisApplication]
+    [[ENSession sharedSession] findNotesWithSearch:[ENNoteSearch noteSearchWithSearchString:@""]
                                         inNotebook:nil
                                            orScope:ENSessionSearchScopeAll
                                          sortOrder:ENSessionSortOrderRecentlyCreated

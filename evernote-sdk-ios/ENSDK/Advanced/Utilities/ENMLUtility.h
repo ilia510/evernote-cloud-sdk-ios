@@ -26,6 +26,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ We are using here forked version
+ 
+ 12.02.2015 - zelenkin: Added method to write A href tags for resources of other than image types
+ 
+ */
+
 #import <Foundation/Foundation.h>
 
 /** Utility methods to work with ENML.
