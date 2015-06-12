@@ -26,7 +26,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import "ENSDK.h"
+#import "ENSDK/ENSDK.h"
 #import "ENSDKAdvanced.h"
 #import "ENLinkedNotebookRef.h"
 #import "ENNoteRefInternal.h"
@@ -38,6 +38,7 @@ extern NSString * const ENBootstrapProfileNameChina;
 
 @interface ENSession (Private)
 @property (nonatomic, readonly) EDAMUserID userID;
++(NSString*) keychainAccessGroup;
 @end
 
 @interface ENNotebook (Private)
@@ -73,7 +74,7 @@ extern NSString * const ENBootstrapProfileNameChina;
 @end
 
 @interface ENNoteContent (Private)
-- (NSString *)enmlWithResources:(NSArray *)resources;
+- (NSString *)enmlWithNote:(ENNote *)note;
 @end
 
 @interface ENNoteStoreClient (Private)
@@ -123,3 +124,8 @@ extern NSString * const ENBootstrapProfileNameChina;
     do { \
         [[ENSession sharedSession].logger evernoteLogErrorString:[NSString stringWithFormat:__VA_ARGS__]]; \
     } while(0);
+
+#define ENSDKResourceBundle [NSBundle bundleWithPath:[[NSBundle bundleForClass:[self class]] pathForResource:@"ENSDKResources" ofType:@"bundle"]]
+
+#define ENSDKLocalizedString(key, comment) \
+NSLocalizedStringFromTableInBundle(key, nil, ENSDKResourceBundle, comment)

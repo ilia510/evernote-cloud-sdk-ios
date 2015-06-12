@@ -149,7 +149,7 @@
     NSString * enml = [self enmlContent];
     if (!enml) {
         ENNoteContent * emptyContent = [ENNoteContent noteContentWithString:@""];
-        enml = [emptyContent enmlWithResources:self.resources];
+        enml = [emptyContent enmlWithNote:self];
     }
     
     // Convert our ENResources to EDAM resources to send into the converter utility. We'll be asking for image resources
@@ -168,13 +168,12 @@
             NSString * extension = [ENMIMEUtils fileExtensionForMIMEType:resource.mimeType];
             NSString * fakeUrl = [NSString stringWithFormat:@"http://example.com/%@.%@", dataHash, extension];
             edamResource.attributes.sourceURL = fakeUrl;
-        } else {
-            edamResource.attributes.sourceURL = [edamResource.attributes.sourceURL en_stringByUrlEncoding];
         }
         [edamResources addObject:edamResource];
     }
     
     ENMLUtility * utility = [[ENMLUtility alloc] init];
+    NSURL * sourceURL = self.sourceUrl ? [NSURL URLWithString:self.sourceUrl] : nil;
     [utility convertENMLToHTML:enml withReferencedResources:edamResources completionBlock:^(NSString * html, NSError * error) {
         if (!html) {
             ENSDKLogInfo(@"+webArchiveData failed to convert ENML to HTML: %@", error);
@@ -184,7 +183,6 @@
         
         // Create main resource from the HTML.
         NSData * htmlData = [html dataUsingEncoding:NSUTF8StringEncoding];
-        NSURL * sourceURL = self.sourceUrl ? [NSURL URLWithString:self.sourceUrl] : nil;
         ENWebResource * mainResource = [[ENWebResource alloc] initWithData:htmlData
                                                                        URL:sourceURL
                                                                   MIMEType:@"text/html"
@@ -239,7 +237,7 @@
 - (NSString *)enmlContent
 {
     if (!self.cachedENMLContent) {
-        self.cachedENMLContent = [self.content enmlWithResources:self.resources];
+        self.cachedENMLContent = [self.content enmlWithNote:self];
     }
     return self.cachedENMLContent;
 }
@@ -274,7 +272,7 @@
     note.content = [self enmlContent];
     if (!note.content) {
         ENNoteContent * emptyContent = [ENNoteContent noteContentWithString:@""];
-        note.content = [emptyContent enmlWithResources:self.resources];
+        note.content = [emptyContent enmlWithNote:self];
     }
     // Invalidate the derivative content fields.
     note.contentHash = nil;

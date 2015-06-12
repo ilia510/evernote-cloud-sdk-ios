@@ -39,6 +39,7 @@
 #import "NSDate+EDAMAdditions.h"
 #import "NSString+URLEncoding.h"
 #import "ENShareURLHelper.h"
+#import "ENCommonUtils.h"
 
 // Strings visible publicly.
 NSString * const ENSessionHostSandbox = @"sandbox.evernote.com";
@@ -49,7 +50,6 @@ NSString * const ENSessionDidUnauthenticateNotification = @"ENSessionDidUnauthen
 static NSString * ENSessionBootstrapServerBaseURLStringCN  = @"app.yinxiang.com";
 static NSString * ENSessionBootstrapServerBaseURLStringUS  = @"www.evernote.com";
 
-static NSString * ENSessionPreferencesFilename = @"com.evernote.evernote-sdk-ios.plist";
 static NSString * ENSessionPreferencesCredentialStore = @"CredentialStore";
 static NSString * ENSessionPreferencesCurrentProfileName = @"CurrentProfileName";
 static NSString * ENSessionPreferencesUser = @"User";
@@ -120,13 +120,19 @@ static NSUInteger ENSessionNotebooksCacheValidity = (5 * 60);   // 5 minutes
 @property (nonatomic, strong) NSString * primaryAuthenticationToken;
 @property (nonatomic, strong) ENUserStoreClient * userStore;
 @property (nonatomic, strong) ENNoteStoreClient * primaryNoteStore;
-@property (nonatomic, strong) ENNoteStoreClient * businessNoteStore;
+@property (nonatomic, strong) ENBusinessNoteStoreClient * businessNoteStore;
 @property (nonatomic, strong) ENAuthCache * authCache;
 @property (nonatomic, strong) NSArray * notebooksCache;
 @property (nonatomic, strong) NSDate * notebooksCacheDate;
 @property (nonatomic, strong) dispatch_queue_t thumbnailQueue;
 
 @property (nonatomic, strong) ENUserStoreClient * userStorePendingRevocation;
+
+@property (nonatomic, assign) long long personalUploadUsage;
+@property (nonatomic, assign) long long personalUploadLimit;
+@property (nonatomic, assign) long long businessUploadUsage;
+@property (nonatomic, assign) long long businessUploadLimit;
+
 @end
 
 @implementation ENSession
@@ -134,6 +140,9 @@ static NSUInteger ENSessionNotebooksCacheValidity = (5 * 60);   // 5 minutes
 static NSString * SessionHostOverride;
 static NSString * ConsumerKey, * ConsumerSecret;
 static NSString * DeveloperToken, * NoteStoreUrl;
+static NSString * SecurityApplicationGroupIdentifier;
+static NSString * _keychainGroup, * _keychainAccessGroup;
+static BOOL disableRefreshingNotebooksCacheOnLaunch;
 
 + (void)setSharedSessionConsumerKey:(NSString *)key
                      consumerSecret:(NSString *)secret
@@ -165,6 +174,27 @@ static NSString * DeveloperToken, * NoteStoreUrl;
         session = [[ENSession alloc] init];
     });
     return session;
+}
+
++ (void)setDisableRefreshingNotebooksCacheOnLaunch:(BOOL)disable
+{
+    disableRefreshingNotebooksCacheOnLaunch = disable;
+}
+
++ (void) setSecurityApplicationGroupIdentifier:(NSString*)securityApplicationGroupIdentifier
+{
+    SecurityApplicationGroupIdentifier = securityApplicationGroupIdentifier;
+}
+
++ (void) setKeychainGroup:(NSString*)keychainGroup
+{
+    _keychainGroup = keychainGroup;
+    _keychainAccessGroup = [[[self bundleSeedID] stringByAppendingString:@"."] stringByAppendingString:_keychainGroup];
+}
+
++ (NSString*) keychainAccessGroup
+{
+    return _keychainAccessGroup;
 }
 
 + (BOOL)checkSharedSessionSettings
@@ -212,7 +242,7 @@ static NSString * DeveloperToken, * NoteStoreUrl;
 - (void)startup
 {
     self.logger = [[ENSessionDefaultLogger alloc] init];
-    self.preferences = [[ENPreferencesStore alloc] initWithStoreFilename:ENSessionPreferencesFilename];
+    self.preferences = SecurityApplicationGroupIdentifier ? [ENPreferencesStore preferenceStoreWithSecurityApplicationGroupIdentifier:SecurityApplicationGroupIdentifier] : [ENPreferencesStore defaultPreferenceStore];
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(storeClientFailedAuthentication:)
@@ -341,17 +371,38 @@ static NSString * DeveloperToken, * NoteStoreUrl;
         [self.preferences encodeObject:user forKey:ENSessionPreferencesUser];
         [self completeAuthenticationWithError:nil];
         
-        // refresh the notebook cache
-        [self listNotebooksWithCompletion:^(NSArray *notebooks, NSError *listNotebooksError) {
-            if (listNotebooksError) {
-                ENSDKLogError(@"Error when listing notebooks: %@", listNotebooksError);
-            }
-            ENSDKLogInfo(@"Notebooks: %@", notebooks);
-        }];
+        if (!disableRefreshingNotebooksCacheOnLaunch) {
+            // refresh the notebook cache
+            [self listNotebooksWithCompletion:^(NSArray *notebooks, NSError *listNotebooksError) {
+                if (listNotebooksError) {
+                    ENSDKLogError(@"Error when listing notebooks: %@", listNotebooksError);
+                }
+                ENSDKLogInfo(@"Notebooks: %@", notebooks);
+            }];
+        }
+        
+        [self refreshUploadUsage];
     } failure:^(NSError * getUserError) {
         ENSDKLogError(@"Failed to get user info for user: %@", getUserError);
         [self completeAuthenticationWithError:(failuresAreFatal ? getUserError : nil)];
     }];
+}
+
+- (void)refreshUploadUsage {
+    [self.primaryNoteStore getSyncStateWithSuccess:^(EDAMSyncState *syncState) {
+        self.personalUploadUsage = syncState.uploaded.longLongValue;
+        self.personalUploadLimit = self.user.accounting.uploadLimit.longLongValue;
+    } failure:^(NSError *error) {
+        ENSDKLogError(@"Failed to get personal sync state");
+    }];
+    if (self.isBusinessUser) {
+        [self.businessNoteStore getSyncStateWithSuccess:^(EDAMSyncState *syncState) {
+            self.businessUploadUsage = syncState.uploaded.longLongValue;
+            self.businessUploadLimit = self.businessUser.accounting.uploadLimit.longLongValue;
+        } failure:^(NSError *error) {
+            ENSDKLogError(@"Failed to get business sync state");
+        }];
+    }
 }
 
 - (void)completeAuthenticationWithError:(NSError *)error
@@ -799,7 +850,7 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     // the sizes are a function of the user's service level, which can change.
     if (![note validateForLimits]) {
         ENSDKLogError(@"Note failed limits validation. Cannot upload. %@", self);
-        completion(nil, [NSError errorWithDomain:ENErrorDomain code:ENErrorCodeLimitReached userInfo:nil]);
+        completion(nil, [ENError noteSizeLimitReachedError]);
     }
     
     ENSessionUploadNoteContext * context = [[ENSessionUploadNoteContext alloc] init];
@@ -876,7 +927,6 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     context.note.updated = @([[NSDate date] edamTimestamp]);
     
     context.note.guid = context.refToReplace.guid;
-    context.note.active = @YES;
     
     if (context.progress) {
         context.noteStore.uploadProgressHandler = context.progress;
@@ -1085,10 +1135,10 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     
     // Validate the scope and sort arguments.
     if (notebook && scope != ENSessionSearchScopeNone) {
-        ENSDKLogError(@"No search scope necessary if notebook provided.");
+        ENSDKLogInfo(@"No search scope necessary if notebook provided.");
         scope = ENSessionSearchScopeNone;
     } else if (!notebook && scope == ENSessionSearchScopeNone) {
-        ENSDKLogError(@"Search scope or notebook must be specified. Defaulting to personal scope.");
+        ENSDKLogInfo(@"Search scope or notebook must be specified. Defaulting to personal scope.");
         scope = ENSessionSearchScopeDefault;
     }
     
@@ -1261,7 +1311,7 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     // Skip linked scope if scope notebook is not a personal linked notebook, or if the
     // linked scope is not included.
     if (context.scopeNotebook) {
-        if (!context.scopeNotebook.isLinked || !context.scopeNotebook.isBusinessNotebook) {
+        if (!context.scopeNotebook.isLinked || context.scopeNotebook.isBusinessNotebook) {
             [self findNotes_processResultsWithContext:context];
             return;
         }
@@ -1527,6 +1577,26 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     });
 }
 
+#pragma mark - Interaction with Evernote app
+
+- (BOOL)viewNoteInEvernote:(ENNoteRef *)noteRef {
+    if (IsEvernoteInstalled() == NO) {
+        return NO;
+    }
+    
+    NSString *viewNoteURLScheme = [NSString stringWithFormat:@"evernote:///view/%d/%@/%@/%@/", self.userID, [self shardIdForNoteRef:noteRef], noteRef.guid, noteRef.guid];
+    return [[UIApplication sharedApplication] openURL:[NSURL URLWithString:viewNoteURLScheme]];
+}
+
+- (BOOL)viewNoteInEvernote:(ENNoteRef *)noteRef callbackURL:(NSString *)callbackURL {
+    if (IsEvernoteInstalled() == NO) {
+        return NO;
+    }
+    
+    NSString *viewNoteURLScheme = [NSString stringWithFormat:@"evernote:///view/%d/%@/%@/%@/?callback=%@", self.userID, [self shardIdForNoteRef:noteRef], noteRef.guid, noteRef.guid, [callbackURL en_stringByUrlEncoding]];
+    return [[UIApplication sharedApplication] openURL:[NSURL URLWithString:viewNoteURLScheme]];
+}
+
 #pragma mark - Private routines
 
 #pragma mark - API helpers
@@ -1640,7 +1710,7 @@ static NSString * DeveloperToken, * NoteStoreUrl;
     return _primaryNoteStore;
 }
 
-- (ENNoteStoreClient *)businessNoteStore
+- (ENBusinessNoteStoreClient *)businessNoteStore
 {
     if (!_businessNoteStore && [self isBusinessUser]) {
         ENBusinessNoteStoreClient * client = [ENBusinessNoteStoreClient noteStoreClientForBusiness];
@@ -1827,6 +1897,29 @@ static NSString * DeveloperToken, * NoteStoreUrl;
         ENSDKLogError(@"Primary note store operation failed authentication. Unauthenticating.");
         [self unauthenticate];
     }
+}
+
+#pragma mark - Keychain Sharing Helpers
+
+// programatically find bundleSeedId/App ID Prefix
++ (NSString *)bundleSeedID {
+    NSDictionary *query = [NSDictionary dictionaryWithObjectsAndKeys:
+                           (__bridge NSString *)kSecClassGenericPassword, (__bridge NSString *)kSecClass,
+                           @"bundleSeedID", kSecAttrAccount,
+                           @"", kSecAttrService,
+                           (id)kCFBooleanTrue, kSecReturnAttributes,
+                           nil];
+    CFDictionaryRef result = nil;
+    OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, (CFTypeRef *)&result);
+    if (status == errSecItemNotFound)
+        status = SecItemAdd((__bridge CFDictionaryRef)query, (CFTypeRef *)&result);
+    if (status != errSecSuccess)
+        return nil;
+    NSString *accessGroup = [(__bridge NSDictionary *)result objectForKey:(__bridge NSString *)kSecAttrAccessGroup];
+    NSArray *components = [accessGroup componentsSeparatedByString:@"."];
+    NSString *bundleSeedID = [[components objectEnumerator] nextObject];
+    CFRelease(result);
+    return bundleSeedID;
 }
 
 @end

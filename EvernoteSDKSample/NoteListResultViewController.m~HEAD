@@ -6,18 +6,28 @@
 //  Copyright (c) 2014 Evernote Corporation. All rights reserved.
 //
 
-#import "ViewAppNotesViewController.h"
-#import <ENSDK/ENSDK.h>
-#import "ViewNoteViewController.h"
+#import "NoteListResultViewController.h"
+#import "NoteDetailViewController.h"
 #import "SVProgressHUD.h"
+#import "CommonUtils.h"
 
-@interface ViewAppNotesViewController () <UITableViewDataSource, UITableViewDelegate>
+@interface NoteListResultViewController () <UITableViewDataSource, UITableViewDelegate>
+@property (nonatomic, strong) ENNoteSearch *noteSearch;
+@property (nonatomic, strong) ENNotebook *notebookToSearch;
 @property (nonatomic, strong) UITableView * tableView;
 @property (nonatomic, strong) NSArray * findNotesResults;
 @property (nonatomic, strong) NSMutableDictionary * thumbnails;
 @end
 
-@implementation ViewAppNotesViewController
+@implementation NoteListResultViewController
+
+- (instancetype)initWithNoteSearch:(ENNoteSearch *)search notebook:(ENNotebook *)notebook{
+    if (self = [super init]) {
+        self.noteSearch = search;
+        self.notebookToSearch = notebook;
+    }
+    return self;
+}
 
 - (void)loadView
 {
@@ -35,9 +45,15 @@
     [super viewDidLoad];
     self.navigationItem.title = @"Notes";
     
+<<<<<<< HEAD:EvernoteSDKSample/ViewAppNotesViewController.m
     [SVProgressHUD showWithMaskType:SVProgressHUDMaskTypeClear];
     [[ENSession sharedSession] findNotesWithSearch:[ENNoteSearch noteSearchWithSearchString:@""]
                                         inNotebook:nil
+=======
+    [SVProgressHUD showWithMaskType:SVProgressHUDMaskTypeBlack];
+    [[ENSession sharedSession] findNotesWithSearch:self.noteSearch
+                                        inNotebook:self.notebookToSearch
+>>>>>>> upstream/master:EvernoteSDKSample/NoteListResultViewController.m
                                            orScope:ENSessionSearchScopeAll
                                          sortOrder:ENSessionSortOrderRecentlyCreated
                                         maxResults:0
@@ -46,28 +62,18 @@
                                             if (!findNotesResults) {
                                                 if ([findNotesError.domain isEqualToString:ENErrorDomain] &&
                                                     findNotesError.code == ENErrorCodePermissionDenied) {
-                                                    [self showSimpleAlertWithMessage:@"Permission denied for note find. Maybe your app only has read access?"];
+                                                    [CommonUtils showSimpleAlertWithMessage:@"Permission denied for note find. Maybe your app only has read access?"];
                                                 } else {
-                                                    [self showSimpleAlertWithMessage:@"Error searching for notes"];
+                                                    [CommonUtils showSimpleAlertWithMessage:@"Error searching for notes"];
                                                 }
                                                 NSLog(@"findNotesError: %@", findNotesError);
                                             } else if (findNotesResults.count == 0) {
-                                                [self showSimpleAlertWithMessage:@"No notes from this app! Go back to menu to create some."];
+                                                [CommonUtils showSimpleAlertWithMessage:@"No notes found."];
                                             } else {
                                                 self.findNotesResults = findNotesResults;
                                                 [self.tableView reloadData];
                                             }
                                         }];
-}
-
-- (void)showSimpleAlertWithMessage:(NSString *)message
-{
-    UIAlertView * alert = [[UIAlertView alloc] initWithTitle:nil
-                                                     message:message
-                                                    delegate:nil
-                                           cancelButtonTitle:nil
-                                           otherButtonTitles:@"OK", nil];
-    [alert show];
 }
 
 #pragma mark - UITableView
@@ -110,7 +116,7 @@
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
     ENSessionFindNotesResult * result = self.findNotesResults[indexPath.row];
-    ViewNoteViewController * vc = [[ViewNoteViewController alloc] init];
+    NoteDetailViewController * vc = [[NoteDetailViewController alloc] init];
     vc.noteRef = result.noteRef;
     vc.noteTitle = result.title;
     [self.navigationController pushViewController:vc animated:YES];

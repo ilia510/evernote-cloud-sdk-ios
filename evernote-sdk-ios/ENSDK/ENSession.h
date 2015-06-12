@@ -195,6 +195,28 @@ typedef NS_OPTIONS(NSUInteger, ENSessionSortOrder) {
  */
 @property (nonatomic, readonly) NSString * businessDisplayName;
 
+/**
+ *  Number of bytes the user's personal account have used for upload.
+ */
+@property (nonatomic, readonly) long long personalUploadUsage;
+
+/**
+ *  Number of bytes the user's personal account limit for upload.
+ */
+@property (nonatomic, readonly) long long personalUploadLimit;
+
+/**
+ *  Number of bytes the user's business account have used for upload.
+ *  Will be 0 if not a business user.
+ */
+@property (nonatomic, readonly) long long businessUploadUsage;
+
+/**
+ *  Number of bytes the user's business account limit for upload.
+ *  Will be 0 if not a business user.
+ */
+@property (nonatomic, readonly) long long businessUploadLimit;
+
 #pragma mark - Session setup
 
 /**
@@ -228,6 +250,13 @@ typedef NS_OPTIONS(NSUInteger, ENSessionSortOrder) {
  *  @return The shared session object.
  */
 + (ENSession *)sharedSession;
+
+/**
+ *  Set to YES if the client would like to opt out from refreshing the notebooks cache on launch
+ *
+ *  @param disable Whether to disable the SDK to refresh the notebooks cache on launch
+ */
++ (void)setDisableRefreshingNotebooksCacheOnLaunch:(BOOL)disable;
 
 #pragma mark - Authentication
 
@@ -373,4 +402,28 @@ typedef NS_OPTIONS(NSUInteger, ENSessionSortOrder) {
 - (void)downloadThumbnailForNote:(ENNoteRef *)noteRef
                     maxDimension:(NSUInteger)maxDimension
                       completion:(ENSessionDownloadNoteThumbnailCompletionHandler)completion;
+
+#pragma mark - Interaction with Evernote app
+
+/**
+ *  View this note in the Evernote app
+ *
+ *  @param noteRef The note to view
+ *
+ *  @return No means the Evernote app is not installed or not available. Yes does not guarantee that this note is successfuly opened,
+ *          as the user could have logged into another account in the Evernote app.
+ */
+- (BOOL)viewNoteInEvernote:(ENNoteRef *)noteRef;
+
+/**
+ *  View this note in the Evernote app and call callbackURL when done
+ *
+ *  @param noteRef      The note to view
+ *  @param callbackURL  callback URL to open after done with the note, something like YOURAPP_URL_SCHEME://callback
+ *
+ *  @return No means the Evernote app is not installed or not available. Yes does not guarantee that this note is successfuly opened,
+ *          as the user could have logged into another account in the Evernote app.
+ */
+- (BOOL)viewNoteInEvernote:(ENNoteRef *)noteRef callbackURL:(NSString *)callbackURL;
+
 @end

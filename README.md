@@ -29,7 +29,11 @@ Yes. (To use the SDK in a non-ARC project, please use the -fobjc-arc compiler fl
 
 ### Can I use this library with CocoaPods?
 
-Not yet. We know this is useful and intend to publish there when the SDK stabilizes and leaves beta.
+Yes! Just add
+```
+pod 'evernote-cloud-sdk-ios'
+```
+to your Podfile
 
 ### Where can I find out more about the Evernote for Developers?
 
@@ -45,6 +49,7 @@ Yes. Please specify preferRegistration parameter as YES when calling
 ```
 on [ENSession sharedSession]
 
-### How can I avoid showing the customized Evernote share sheet and Evernote iOS 8 share extension at the same time?
+### Where can I find the release notes?
 
-You can do the same thing as our sample app does: If on iOS 8 and Evernote app is installed do not show the customized share sheet provided by the SDK. Check out the code from [here](https://github.com/evernote/evernote-cloud-sdk-ios/blob/master/EvernoteSDKSample/SaveActivityViewController.m#L38-L41).
+ You can find it [here](CHANGES.md).
+ 

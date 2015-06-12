@@ -28,10 +28,13 @@
 
 #import "ENSDKPrivate.h"
 #import "NSData+EvernoteSDK.h"
+#import "ENMLUtility.h"
 
 @interface ENResource ()
 @property (nonatomic, copy) NSString * sourceUrl;
 @property (nonatomic, strong) NSData * dataHash;
+@property (nonatomic, strong) NSDictionary * edamAttributes;
+@property (nonatomic, copy) NSString * guid;
 @end
 
 @implementation ENResource
@@ -46,6 +49,7 @@
     resource.mimeType = serviceResource.mime;
     resource.filename = serviceResource.attributes.fileName;
     resource.sourceUrl = serviceResource.attributes.sourceURL;
+    resource.guid = serviceResource.guid;
     return resource;
 }
 
@@ -124,8 +128,29 @@
     if (self.sourceUrl) {
         attributes.sourceURL = self.sourceUrl;
     }
+    
     resource.attributes = attributes;
+    
+    // set EDAM attributes if edamAttributes dictionary is not nil
+    for (NSString * key in self.edamAttributes.allKeys) {
+        id value = [self.edamAttributes valueForKey:key];
+        @try {
+            [resource.attributes setValue:value forKey:key];
+        }
+        @catch (NSException *exception) {
+            ENSDKLogError(@"Unable to set value %@ for key %@ on EDAMResource.attributes", value, key);
+            if ([[exception name] isEqualToString: NSUndefinedKeyException]) {
+                ENSDKLogError(@"Key %@ not found on EDAMResource.attributes", key);
+            }
+        }
+    }
 
     return resource;
 }
+
+- (NSString*) mediaTag
+{
+    return [ENMLUtility mediaTagWithDataHash:self.dataHash mime:self.mimeType];
+}
+
 @end
